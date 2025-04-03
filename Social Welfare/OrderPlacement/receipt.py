@@ -1,6 +1,6 @@
-#receipt.py
 import os
 import json
+from .prices import get_size_price, get_special_cost, get_beverage_price, get_side_price
 
 RECEIPT_FILE = "receipts.json"
 RECEIPT_NUMBER_FILE = "receipt_number.txt"
@@ -43,37 +43,28 @@ def genReceipt(all_orders, meal_type):
     formatted_receipt_number = f"{receipt_number:08d}"
     total_cost = 0
 
-    size_prices = {
-        'breakfast': {'SML': 500, 'MED': 650, 'LRG': 750},
-        'lunch': {'SML': 700, 'MED': 800, 'LRG': 900}
-    }
-    special_cost = 250 if meal_type == 'breakfast' else 500
-    beverage_prices = {
-        'breakfast': {'Tea': 150, 'Coffee': 150, 'Orange Juice': 200, 'Water': 100},
-        'lunch': {'Soda': 150, 'Fruit Juice': 250, 'Iced Tea': 200, 'Water': 100}
-    }
-
     width = 40
     print("\n---- Order Receipt ----")
     print(f"Receipt Number: {formatted_receipt_number}")
     for idx, order in enumerate(all_orders, 1):
         print(f"\nOrder #{idx}:")
         item_total = 0
-        main_cost = size_prices[meal_type][order['size']]
+        
+        # Calculate main course cost based on meal type and selected size.
+        main_cost = get_size_price(meal_type, order['size'])
         item_total += main_cost
         order['main_price'] = main_cost
         print(f"Main Course ({order['size']}): {order['main']}".ljust(width) + f"${main_cost:.2f}")
         
-        order['side_price'] = 0
-        print(f"Side Dish: {order['side']}".ljust(width) + "$0.00")
+        # Calculate side dish cost.
+        side_price = get_side_price()
+        order['side_price'] = side_price
+        print(f"Side Dish: {order['side']}".ljust(width) + f"${side_price:.2f}")
+        item_total += side_price
         
-        if order.get('additional_side'):
-            order['additional_side_price'] = 0
-            print(f"Additional Side: {order['additional_side']}".ljust(width) + "$0.00")
-        else:
-            order['additional_side_price'] = 0
-        
+        # Apply daily special cost if available.
         if order.get('special'):
+            special_cost = get_special_cost(meal_type)
             order['special_cost'] = special_cost
             item_total += special_cost
             print(f"Daily Special: {order['special']}".ljust(width) + f"${special_cost:.2f}")
@@ -85,7 +76,7 @@ def genReceipt(all_orders, meal_type):
         print(f"Customization: {order['customization']}".ljust(width) + "$0.00")
         
         if order.get('beverage'):
-            beverage_price = beverage_prices[meal_type].get(order['beverage'], 0)
+            beverage_price = get_beverage_price(meal_type, order['beverage'])
             order['beverage_price'] = beverage_price
             item_total += beverage_price
             print(f"Beverage: {order['beverage']}".ljust(width) + f"${beverage_price:.2f}")
