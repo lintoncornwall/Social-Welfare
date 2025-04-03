@@ -22,7 +22,6 @@ class RefundManager:
         with open(self.receipt_file, 'w') as f:
             json.dump(cashed_receipts, f, indent=4)
 
-    
     def request_refund(self):
         """Allow the user to request a refund for a previously confirmed order."""
         # Ask the user for the receipt number
@@ -54,16 +53,11 @@ class RefundManager:
 
                 # Side Dish
                 side_price = order.get('side_price', 0.00)
-                print(f"Side Dish: {order['side']}".ljust(width) + f"${side_price:.2f}")  # Ensure the side price is accessed properly
+                print(f"Side Dish: {order['side']}".ljust(width) + f"${side_price:.2f}")
 
-                # Additional Side
-                additional_side_price = order.get('additional_side_price', 0.00)
-                if order['additional_side']:
-                    print(f"Additional Side: {order['additional_side']}".ljust(width) + f"${additional_side_price:.2f}")
-                
                 # Daily Special
                 special_cost = order.get('special_cost', 0.00)
-                if order['special']:
+                if order.get('special'):
                     print(f"Daily Special: {order['special']}".ljust(width) + f"${special_cost:.2f}")
                 else:
                     print("Daily Special: None".ljust(width) + "$0.00")
@@ -73,13 +67,13 @@ class RefundManager:
 
                 # Beverage
                 beverage_price = order.get('beverage_price', 0.00)
-                if order['beverage']:
+                if order.get('beverage'):
                     print(f"Beverage: {order['beverage']}".ljust(width) + f"${beverage_price:.2f}")
                 else:
                     print("Beverage: None".ljust(width) + "$0.00")
 
-                # Order Total
-                item_total = main_price + side_price + special_cost + additional_side_price + beverage_price
+                # Order Total (excluding additional side)
+                item_total = main_price + side_price + special_cost + beverage_price
                 print(f"Order Total:".ljust(width) + f"${item_total:.2f}")
 
             # Total Refund Amount
@@ -111,9 +105,6 @@ class RefundManager:
                 print("\nRefund request canceled.")
         else:
             print("No order found with that receipt number.")
-
-
-
 
     def log_refund(self, receipt, transaction_reference):
         """Log the refunded order to a file or database."""
