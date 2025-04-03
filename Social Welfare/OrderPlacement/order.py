@@ -112,15 +112,17 @@ def confirmOrder(order_details):
         add_to_faves = input("Would you like to add this order to your favorites? (y/n): ").strip().lower()
         if add_to_faves == 'y':
             editFaves(order_details)
-        delivery_choice = input("Would you like delivery or pickup? (Enter 'delivery' or 'pickup'): ").strip().lower()
-        if delivery_choice == 'delivery':
-            requestDelivery()
-        else:
-            print("Thank you! Your pickup order has been confirmed.")
+        # Remove the following delivery/pickup prompt:
+        # delivery_choice = input("Would you like delivery or pickup? (Enter 'delivery' or 'pickup'): ").strip().lower()
+        # if delivery_choice == 'delivery':
+        #     requestDelivery()
+        # else:
+        #     print("Thank you! Your pickup order has been confirmed.")
         return True
     else:
         cancelOrder(order_details)
         return False
+
 
 def cancelOrder(order_details):
     """Cancel the order."""
@@ -165,10 +167,16 @@ def makeOrder():
                 else:
                     print("Let's redo your order.")
                     return makeOrder()  # Restart the order flow
+            # Ask for delivery/pickup once after all orders are confirmed
+            delivery_choice = input("\nWould you like delivery or pickup for your entire order? (Enter 'delivery' or 'pickup'): ").strip().lower()
+            if delivery_choice == 'delivery':
+                requestDelivery()
+            else:
+                print("Thank you! Your pickup order has been confirmed.")
             genReceipt(all_orders, 'breakfast')
         else:
             print(f"No breakfast menu found for {day}.")
-    elif "11:30" <= current_time <= "18:00":
+    elif "11:30" <= current_time <= "23:00":
         print("It's lunch time!")
         day = now.strftime("%A")
         lunch_menu = load_menu('menuitems/lunch.csv')
@@ -199,6 +207,12 @@ def makeOrder():
                 else:
                     print("Let's redo your order.")
                     return makeOrder()
+            # Ask for delivery/pickup once after all orders are confirmed
+            delivery_choice = input("\nWould you like delivery or pickup for your entire order? (Enter 'delivery' or 'pickup'): ").strip().lower()
+            if delivery_choice == 'delivery':
+                requestDelivery()
+            else:
+                print("Thank you! Your pickup order has been confirmed.")
             genReceipt(all_orders, 'lunch')
         else:
             print(f"No lunch menu found for {day}.")
