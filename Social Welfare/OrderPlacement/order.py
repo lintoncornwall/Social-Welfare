@@ -4,9 +4,10 @@ import os
 import json
 from .menu import load_menu
 from .receipt import genReceipt
-from .favorites import editFaves
 from .delivery import requestDelivery
 from RefundManagement.refund_manager import RefundManager  # Assuming this exists
+from .prices import get_size_price, get_side_price, get_special_cost, get_beverage_price
+from .favorites import addOrderToFaves  
 
 def get_meal_choices(menu, day, is_lunch_time=False):
     """Display and get meal choices for a specific day."""
@@ -28,7 +29,7 @@ def get_meal_choices(menu, day, is_lunch_time=False):
     for idx, item in enumerate(side_choices, 1):
         print(f"{idx}. {item}")
     
-    # Get user selections with error handling for main and side choices
+    # Get user selections with error handling
     main_choice = None
     while main_choice is None:
         try:
@@ -91,43 +92,82 @@ def get_beverage_choice(meal_type):
             print(e)
             choice = None
 
-def confirmOrder(order_details):
-    """Confirm the order with the user."""
-    print("\nYour order details:")
-    print("Main Course: ", order_details['main'])
-    print("Side Dish: ", order_details['side'])
-    print("Daily Special: ", order_details.get('special') or "None")
-    print("Customization: ", order_details.get('customization'))
-    if order_details.get('beverage'):
-        print("Beverage: ", order_details['beverage'])
-    
-    is_correct = input("\nIs your order correct? (y/n): ").strip().lower()
-    if is_correct == 'n':
-        print("Let's redo your order.")
-        return False
-    
-    confirm = input("\nDo you want to confirm this order? (y/n): ").strip().lower()
-    if confirm == 'y':
-        print("Your order has been completed, thank you!")
-        add_to_faves = input("Would you like to add this order to your favorites? (y/n): ").strip().lower()
-        if add_to_faves == 'y':
-            editFaves(order_details)
-        # Remove the following delivery/pickup prompt:
-        # delivery_choice = input("Would you like delivery or pickup? (Enter 'delivery' or 'pickup'): ").strip().lower()
-        # if delivery_choice == 'delivery':
-        #     requestDelivery()
-        # else:
-        #     print("Thank you! Your pickup order has been confirmed.")
-        return True
-    else:
-        cancelOrder(order_details)
-        return False
-
-
 def cancelOrder(order_details):
     """Cancel the order."""
     print("\nYour order has been canceled.")
-    # Additional cancellation logic can be implemented here
+
+def show_order_summary(all_orders, meal_type):
+    """
+    Show a cost breakdown for each order in all_orders without finalizing a receipt.
+    Returns the total cost for all orders.
+    """
+    print("\n-- Order Summary (Preview) --")
+    total_cost = 0
+    for idx, order in enumerate(all_orders, start=1):
+        print(f"\nOrder #{idx}:")
+        print(f"  Main: {order['main']} ({order['size']})")
+        print(f"  Side: {order['side']}")
+        print(f"  Daily Special: {order.get('special') or 'None'}")
+        print(f"  Customization: {order.get('customization')}")
+        print(f"  Beverage: {order.get('beverage') or 'None'}")
+
+        # Calculate costs similarly to receipt.py
+        main_cost = get_size_price(meal_type, order['size'])
+        side_cost = get_side_price()
+        special_cost = get_special_cost(meal_type) if order.get('special') else 0
+        beverage_cost = 0
+        if order.get('beverage'):
+            beverage_cost = get_beverage_price(meal_type, order['beverage'])
+
+        item_total = main_cost + side_cost + special_cost + beverage_cost
+        total_cost += item_total
+
+        print(f"  -> Subtotal: ${item_total:.2f}")
+    print(f"\nOverall Total: ${total_cost:.2f}")
+    print("-- End of Summary --\n")
+    return total_cost
+
+def finalizeOrder(all_orders, meal_type):
+    """
+    1) Display full order details with cost breakdown.
+    2) Ask if the overall order is correct.
+    3) Ask if they'd like delivery or pickup.
+    4) Process the online payment if the order is confirmed.
+    5) If payment is successful, generate the final receipt; otherwise, cancel.
+    """
+    total_cost = show_order_summary(all_orders, meal_type)
+
+    is_correct = input("Is your order correct? (y/n): ").strip().lower()
+    if is_correct != 'y':
+        print("Order not confirmed. Let's cancel.")
+        return
+
+    # Ask if they'd like delivery or pickup.
+    delivery_choice = input("Would you like delivery or pickup? (Enter 'delivery' or 'pickup'): ").strip().lower()
+    if delivery_choice == 'delivery':
+        from .delivery import requestDelivery
+        requestDelivery()
+    else:
+        print("Thank you! Your pickup order has been noted.")
+
+    # Update each order with the order type.
+    for order in all_orders:
+        order['order_type'] = delivery_choice
+
+    # Ask if they'd like to confirm and proceed to payment.
+    final_confirm = input("Would you like to confirm and proceed to payment? (y/n): ").strip().lower()
+    if final_confirm == 'y':
+        # Import the payment module and process payment.
+        from .payment import processPayment
+        if processPayment(total_cost):
+            from .receipt import genReceipt
+            genReceipt(all_orders, meal_type)
+            print("Your order has been completed, thank you!")
+        else:
+            print("Payment was not successful. Order canceled.")
+    else:
+        print("Order canceled.")
+
 
 def makeOrder():
     """Create an order based on time of day."""
@@ -136,7 +176,8 @@ def makeOrder():
     all_orders = []
     refund_manager = RefundManager()
 
-    if "08:00" <= current_time <= "11:30":
+    # Adjust these time checks as needed for your logic.
+    if "00:00" <= current_time <= "11:30":
         print("It's breakfast time!")
         day = now.strftime("%A")
         breakfast_menu = load_menu('menuitems/breakfast.csv')
@@ -152,6 +193,7 @@ def makeOrder():
                 main, side, special, customization = get_meal_choices(breakfast_menu, day)
                 beverage, beverage_price = get_beverage_choice('breakfast')
                 
+                # Build the individual order
                 order = {
                     'main': main,
                     'side': side,
@@ -162,21 +204,18 @@ def makeOrder():
                     'beverage_price': beverage_price
                 }
                 
-                if confirmOrder(order):
-                    all_orders.append(order)
-                else:
-                    print("Let's redo your order.")
-                    return makeOrder()  # Restart the order flow
-            # Ask for delivery/pickup once after all orders are confirmed
-            delivery_choice = input("\nWould you like delivery or pickup for your entire order? (Enter 'delivery' or 'pickup'): ").strip().lower()
-            if delivery_choice == 'delivery':
-                requestDelivery()
-            else:
-                print("Thank you! Your pickup order has been confirmed.")
-            genReceipt(all_orders, 'breakfast')
+                # >>> NEW: Ask if the user wants to add this single order to favorites
+                add_to_faves = input("Would you like to add this order to your favorites? (y/n): ").strip().lower()
+                if add_to_faves == 'y':
+                    addOrderToFaves(order)
+
+                # Finally, add the order to our master list
+                all_orders.append(order)
+
+            finalizeOrder(all_orders, 'breakfast')
         else:
             print(f"No breakfast menu found for {day}.")
-    elif "11:30" <= current_time <= "23:00":
+    elif "11:31" <= current_time <= "23:59":
         print("It's lunch time!")
         day = now.strftime("%A")
         lunch_menu = load_menu('menuitems/lunch.csv')
@@ -192,6 +231,7 @@ def makeOrder():
                 main, side, special, customization = get_meal_choices(lunch_menu, day, is_lunch_time=True)
                 beverage, beverage_price = get_beverage_choice('lunch')
                 
+                # Build the individual order
                 order = {
                     'main': main,
                     'side': side,
@@ -201,19 +241,16 @@ def makeOrder():
                     'beverage': beverage,
                     'beverage_price': beverage_price
                 }
-                
-                if confirmOrder(order):
-                    all_orders.append(order)
-                else:
-                    print("Let's redo your order.")
-                    return makeOrder()
-            # Ask for delivery/pickup once after all orders are confirmed
-            delivery_choice = input("\nWould you like delivery or pickup for your entire order? (Enter 'delivery' or 'pickup'): ").strip().lower()
-            if delivery_choice == 'delivery':
-                requestDelivery()
-            else:
-                print("Thank you! Your pickup order has been confirmed.")
-            genReceipt(all_orders, 'lunch')
+
+                # >>> NEW: Ask if the user wants to add this single order to favorites
+                add_to_faves = input("Would you like to add this order to your favorites? (y/n): ").strip().lower()
+                if add_to_faves == 'y':
+                    addOrderToFaves(order)
+
+                # Add the order to our master list
+                all_orders.append(order)
+
+            finalizeOrder(all_orders, 'lunch')
         else:
             print(f"No lunch menu found for {day}.")
     else:
