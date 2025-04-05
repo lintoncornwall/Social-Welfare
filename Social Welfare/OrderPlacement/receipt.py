@@ -1,3 +1,4 @@
+#receipt.py
 import os
 import json
 from .prices import get_size_price, get_special_cost, get_beverage_price, get_side_price
@@ -36,7 +37,7 @@ def save_cashed_receipts(cashed_receipts):
 def genReceipt(all_orders, meal_type):
     """
     Generate the receipt with cost calculation for all confirmed orders.
-    :param all_orders: List of confirmed orders
+    :param all_orders: List of confirmed orders (each must include an 'order_type' key)
     :param meal_type: 'breakfast' or 'lunch' to determine pricing
     """
     receipt_number = load_receipt_number()
@@ -84,11 +85,13 @@ def genReceipt(all_orders, meal_type):
             order['beverage_price'] = 0
             print("Beverage: None".ljust(width) + "$0.00")
         
+        # New: Print the order status (pickup or delivery)
+        order_type = order.get('order_type', 'pickup')
+        print(f"Order Type: {order_type.capitalize()}".ljust(width))
+        
         print(f"Order Total:".ljust(width) + f"${item_total:.2f}")
         total_cost += item_total
-    
-    print("\n" + "-" * (width + 10))
-    print(f"Total:".rjust(width) + f"${total_cost:.2f}")
+    print(f"\nOverall Total:".rjust(width) + f"${total_cost:.2f}")
     print("-" * (width + 10))
     print("\n---- Thank You! ----")
 
@@ -101,3 +104,28 @@ def genReceipt(all_orders, meal_type):
     cashed_receipts.append(receipt)
     save_cashed_receipts(cashed_receipts)
     save_receipt_number(receipt_number + 1)
+
+def calculateTotal(all_orders, meal_type):
+    """
+    Calculate and return the total cost for the given orders.
+    This function mirrors the cost calculation in genReceipt without printing.
+    """
+    total_cost = 0
+    for order in all_orders:
+        item_total = 0
+        # Calculate main course cost.
+        main_cost = get_size_price(meal_type, order['size'])
+        item_total += main_cost
+        # Calculate side dish cost.
+        side_cost = get_side_price()
+        item_total += side_cost
+        # Daily special cost if available.
+        if order.get('special'):
+            special_cost = get_special_cost(meal_type)
+            item_total += special_cost
+        # Beverage cost if available.
+        if order.get('beverage'):
+            beverage_cost = get_beverage_price(meal_type, order['beverage'])
+            item_total += beverage_cost
+        total_cost += item_total
+    return total_cost
